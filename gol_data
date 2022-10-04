@@ -1,0 +1,185 @@
+/* 
+ Based on Advanced Programming in the Unix Envitonment, 3ed
+ by R. Stevens and S. Rago
+ */
+
+ /* gol_data nThreads gridSize nIterations -d */
+
+#include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <sys/time.h>
+
+
+int** curGrid;
+int** futureGrid;
+
+int nThreads;
+int gridSize;
+int numIter;
+
+void makeArray(int gridSize);
+
+
+void makeArray(int gridSize){
+	int i = 0;
+	curGrid = malloc(sizeof(int *)*gridSize);
+    for(i=0;i<gridSize;i++){
+        curGrid[i] = malloc(sizeof(int)*gridSize);
+    }
+
+    i = 0;
+	futureGrid = malloc(sizeof(int *)*gridSize);
+    for(i=0;i<gridSize;i++){
+        futureGrid[i] = malloc(sizeof(int)*gridSize);
+    }
+
+    int k=0, j=0;
+	srand(time(NULL));
+	for (k=0;k<gridSize;k++){
+		for (j=0; j<gridSize;++j){
+			int num = rand()%5;
+			if (num < 3){
+				curGrid[k][j] = 1;
+			} else {
+				curGrid[k][j] = 0;
+			}
+		}
+	}
+}
+
+void printGrid(int gridSize, int grids){
+	int i=0, j=0;
+	for (i=0;i<gridSize;i++){
+		for (j=0; j<gridSize;++j){
+			if (curGrid[i][j] == 1) {
+        		printf("x");
+        	} else {
+        		printf("O");
+        	}
+
+		}
+		printf("\n");
+	}
+	printf("\n");
+}
+
+
+
+void *cgol(void *nThreadcgol) {
+  long thread2 = (long)nThreadcgol;
+  int divide = gridSize / nThreads;
+  int rows = (thread2 * divide) + (divide);
+  int col = (thread2 ) * (divide);
+  int i, j, neighbours;
+  int size = gridSize/nThreads;
+  int leftover = gridSize - ((gridSize/nThreads)*(nThreads));
+  int newSize=0;
+
+  if (leftover>0){
+	newSize = size + 1;
+	leftover--;
+  } else {
+	newSize = size;
+  }
+
+  for(i = 0; i < gridSize; i++) {
+	
+    for(j = (thread2*newSize); j < ((thread2*newSize)+newSize); j++) {
+		
+      neighbours = 0;
+      if(i > 0 && curGrid[i - 1][j]) {
+        neighbours++;
+      }
+	  if(i > 0 && j > 0 && curGrid[i - 1][j - 1]) {
+        neighbours++;
+      }
+      if(i < gridSize - 1 && j < gridSize - 1 && curGrid[i + 1][j + 1]) {
+        neighbours++;
+      }
+      if(j > 0 && i < gridSize - 1 && curGrid[i + 1][j - 1]) {
+        neighbours++;
+      }
+      if(j < gridSize - 1 && i > 0 && curGrid[i - 1][j + 1]) {
+        neighbours++;
+      }
+      if(i < gridSize - 1 && curGrid[i + 1][j]) {
+        neighbours++;
+      }
+      if(j > 0 && curGrid[i][j - 1]) {
+        neighbours++;
+      }
+      if(j < gridSize - 1 && curGrid[i][j + 1]) {
+        neighbours++;
+      }
+      if((curGrid[i][j] == 0 && neighbours == 3) || (curGrid[i][j] == 1 && (neighbours == 3 || neighbours == 2))) {
+        futureGrid[i][j] = 1;
+      } else {
+        futureGrid[i][j] = 0;
+      }
+    }
+  }
+
+  return NULL;
+}
+void copyGrid() {
+  int i, j;
+
+  for(i = 0; i < gridSize; i++) {
+    for(j = 0; j < gridSize; j++) {
+      curGrid[i][j] = futureGrid[i][j];
+    }
+  }
+}
+
+int main(int argc, char const *argv[]) {
+	
+	if (argc < 3){
+		printf("Enter the number of threads, the size of the grid and the number of iterations (# # # -d)\n");
+		exit(0);
+	}
+
+	/*up to 4 command line arguments*/
+    nThreads = atol(argv[1]);
+	gridSize = atol(argv[2]);
+	numIter = atol(argv[3]);
+	int display = 0;
+
+	pthread_t       tid[nThreads];
+	int				err;
+
+	if (argc == 5){
+		if (strcmp(argv[4], "-d")==0){
+			display = 1;
+		}
+	}
+  
+	makeArray(gridSize);
+    if (display == 1){
+        printGrid(gridSize, **curGrid);
+    }
+	
+	int i=0;
+	long countThread=0;
+
+	for (i = 0; i < numIter; i++) {
+		for (countThread=0; countThread<nThreads;countThread++){
+			err = pthread_create(&tid[countThread], NULL, cgol, (void *)countThread);
+			if (err != 0){
+				printf("Cannot create thread, error: %d", err);
+				exit(-1);
+			}
+		}
+		for(countThread = 0; countThread < nThreads; countThread++) {
+			pthread_join(tid[countThread], NULL);
+			}
+
+		copyGrid();
+		if(display) {
+			printGrid(gridSize, **curGrid);
+		}
+    }
+	
+}
